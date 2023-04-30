@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Population growth</title>
+    <meta charset="utf-8">
+    <style>
+        line.x,
+        line.y,
+        circle.y {
+            stroke: #055599;
+            stroke-width: 2px;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+<!-- Create a div where the graph will take place -->
+<div id="chart"></div>
+
+<script>
+
+    const year_offset = 10000;
+    // set the dimensions and margins of the graph
+    const margin = {top: 50, right: 100, bottom: 75, left: 75},
+        width = 800 - margin.left - margin.right,
+        height = 700 - margin.top - margin.bottom;
+
+    // append the svg object to the body of the page
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    //Read the data
+    d3.csv("demographics.csv",
+
+        d => {
+            return {
+                year: year_offset + +d.year,
+                type: d.type,
+                population: +d.population / 1000000000,
+                pop_growth_rate: d.pop_growth_rate,
+            }
+        }).then(
+        function (data) {
+
+            const x = d3.scaleLinear()
+                .domain([d3.min(data, d => d.year), d3.max(data, d => d.year)])
+                .range([0, width]);
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.population)])
+                .range([height, 0]);
+            const ypercentage = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.pop_growth_rate)])
+                .range([height, 0]);
+
+
+            svg
+                .append("text")
+                .attr("class", "axis-label")
+                .attr("x", height / -2)
+                .attr("y", -30)
+                .attr("font-size", "20px")
+                .attr("text-anchor", "middle")
+                .attr("transform", "rotate(-90)")
+                .text("Population (Billions)");
+
+            svg
+                .append("text")
+                .attr("class", "axis-label")
+                .attr("x", height / 2)
+                .attr("y", -1 * width - 50)
+                .attr("font-size", "20px")
+                .attr("text-anchor", "middle")
+                .attr("transform", "rotate(90)")
+                .text("Population growth rate (Percentage)");
+
+            svg
+                .append("text")
+                .attr("class", "axis-label")
+                .attr("x", width / 2)
+                .attr("y", height + margin.bottom)
+                .attr("font-size", "20px")
+                .attr("text-anchor", "middle")
+                .text("Year (Human era)");
+
+
+            // Add the area
+            svg.append("path")
+                .datum(data.filter(d => d.type !== "un_prediction"))
+                .attr("opacity", "50%")
+                .attr("fill", "#fa6607")
+                .attr("stroke", "#fa6607")
+                .attr("stroke-width", 3)
+                .attr("d", d3.area()
+                    .x(d => Math.max(x(d.year), 2))
+                    .y0(d => y(0))
+                    .y1(d => y(d.population))
+                );
+
+            svg.append("path")
+                .datum(data.filter(d => d.type !== "un_prediction"))
+                .attr("fill", "none")
+                .attr("stroke", "#fa6607")
+                .attr("stroke-width", 4)
+                .attr("d", d3.area()
+                    .x(d => x(d.year))
+                    .y(d => y(d.population))
+                );
+
+            svg.append("path")
+                .datum(data.filter(d => d.type === "un_prediction"))
+                .attr("opacity", "50%")
+                .attr("fill", "#ffaa77")
+                .attr("stroke", "#ffaa77")
+                .attr("stroke-width", 3)
+                .attr("d", d3.area()
+                    .x(d => x(d.year))
+                    .y0(d => y(0))
+                    .y1(d => y(d.population))
+                );
+
+            svg.append("path")
+                .datum(data.filter(d => d.type === "un_prediction"))
+                .attr("fill", "none")
+                .attr("stroke", "#ffaa77")
+                .attr("stroke-width", 2)
+                .style("stroke-dasharray", "2,7")
+                .attr("d", d3.area()
+                    .x(d => x(d.year))
+                    .y(d => y(d.population))
+                );
+
+            svg.append("path")
+                .datum(data.filter(d => d.type !== "un_prediction"))
+                .attr("opacity", "50%")
+                .attr("fill", "none")
+                .attr("stroke", "#055599")
+                .attr("stroke-width", 2)
+                .attr("d", d3.area()
+                    .x(d => x(d.year))
+                    .y(d => ypercentage(d.pop_growth_rate))
+                );
+
+            svg.append("path")
+                .datum(data.filter(d => d.type === "un_prediction"))
+                .attr("opacity", "50%")
+                .attr("fill", "none")
+                .attr("stroke", "#055599")
+                .attr("stroke-width", 2)
+                .style("stroke-dasharray", "2,7")
+                .attr("d", d3.area()
+                    .x(d => x(d.year))
+                    .y(d => ypercentage(d.pop_growth_rate))
+                );
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                    .style("text-anchor", "end")
+                    .attr("dx", "-.8em")
+                    .attr("dy", ".15em")
+                    .attr("transform", "rotate(-25)");
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+            svg.append("g")
+                .attr("class", "y axis")
+                .attr("transform", "translate(" + width + " ,0)")
+                .call(d3.axisRight(ypercentage));
+
+
+            function mouseMove(event) {
+                const bisect = d3.bisector((d) => d.year).left,
+                    x0 = x.invert(d3.pointer(event, this)[0]),
+                    i = bisect(data, x0, 1),
+                    d0 = data[i - 1],
+                    d1 = data[i],
+                    d = x0 - d0.year > d1.year - x0 ? d1 : d0;
+
+                growthfocus
+                    .select("circle.y")
+                    .attr("transform", "translate(" + x(d.year) + "," + ypercentage(d.pop_growth_rate) + ")");
+                growthfocus
+                    .select("text.y1")
+                    .attr("transform", "translate(" + x(d.year) + "," + ypercentage(d.pop_growth_rate) + ")")
+                    .text(d.pop_growth_rate + "%");
+                growthfocus
+                    .select("text.y2")
+                    .attr("transform", "translate(" + x(d.year) + "," + ypercentage(d.pop_growth_rate) + ")")
+                    .text(d.year);
+                growthfocus
+                    .select(".x")
+                    .attr("transform", "translate(" + x(d.year) + "," + ypercentage(d.pop_growth_rate) + ")")
+                    .attr("y2", height - ypercentage(d.pop_growth_rate));
+                growthfocus
+                    .select(".y")
+                    .attr("transform", "translate(" + width * -1 + "," + ypercentage(d.pop_growth_rate) + ")")
+                    .attr("x1", width + x(d.year))
+                    .attr("x2", width + width);
+
+                popfocus
+                    .select("circle.y")
+                    .attr("transform", "translate(" + x(d.year) + "," + y(d.population) + ")");
+                popfocus
+                    .select("text.y1")
+                    .attr("transform", "translate(" + x(d.year) + "," + y(d.population) + ")")
+                    .text(d.population.toFixed(3));
+                popfocus
+                    .select("text.y2")
+                    .attr("transform", "translate(" + x(d.year) + "," + y(d.population) + ")")
+                    .text(d.year);
+                popfocus
+                    .select(".x")
+                    .attr("transform", "translate(" + x(d.year) + "," + y(d.population) + ")")
+                    .attr("y2", height - y(d.population));
+                popfocus
+                    .select(".y")
+                    .attr("transform", "translate(" + width * -1 + "," + y(d.population) + ")")
+                    .attr("x2", width + x(d.year));
+            }
+
+            function create_focus_marker(text_offset) {
+                // Focus marker for the growth line
+                const focus = svg
+                    .append("g")
+                    .attr("class", "focus")
+                    .style("display", "none");
+
+                // Append the x line of the focus marker
+                focus
+                    .append("line")
+                    .attr("class", "x")
+                    .style("stroke-dasharray", "3,3")
+                    .style("opacity", 0.5)
+                    .attr("y1", 0)
+                    .attr("y2", height);
+
+                // Append the y line of the focus marker
+                focus
+                    .append("line")
+                    .attr("class", "y")
+                    .style("stroke-dasharray", "3,3")
+                    .style("opacity", 0.5)
+                    .attr("x1", width)
+                    .attr("x2", width);
+
+                // Append the circle at the intersection
+                focus
+                    .append("circle")
+                    .attr("class", "y")
+                    .style("fill", "none")
+                    .attr("r", 4); // radius
+
+                // Place the value and year at the intersection
+                focus.append("text").attr("class", "y1").attr("dx", text_offset).attr("dy", "-.3em"); // Value
+                focus.append("text").attr("class", "y2").attr("dx", text_offset).attr("dy", "1em");   // Year
+
+                return focus;
+            }
+            const growthfocus = create_focus_marker("-4.2em");
+            const popfocus = create_focus_marker("1ex");
+
+            svg
+                .append("rect")
+                .attr("width", width)
+                .attr("height", height)
+                .style("fill", "none")
+                .style("pointer-events", "all")
+                .on("mouseover", () => {
+                    growthfocus.style("display", null);
+                    popfocus.style("display", null);
+                })
+                .on("mouseout", () => {
+                    growthfocus.style("display", "none");
+                    popfocus.style("display", "none");
+                })
+                .on("touchmove mousemove", mouseMove);
+
+            window.postMessage("finished setup", "*");
+        })
+
+</script>
+<script src="size-broadcaster.js"></script>
+</body>
+</html>
